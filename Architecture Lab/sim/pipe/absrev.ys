@@ -1,0 +1,254 @@
+#/* $begin absrev-ys */
+##################################################################
+# absrev.ys - Reverse a src block of len words to dst.
+# Return the sum of absolute values of words contained in src.
+#
+# Mehmet Tokgöz - 2528784
+# 
+# First, I used loop unrolling to reduce time because at first we were using only one register for loop. 
+# So, I figure out that my code is getting speed when I read from memory using different registers at a time.
+# I first done it for length 4 and 10 but then the length of object code exceed 1000, so I decided to make it 8, 4, 2 and 1.
+# To sum the values, I used a JUMP strategy for sbutracting negative values and adding postive values to %rax 
+# After this unrolling and jump, I get average CPE ~11.
+#
+# Other than that, I moved the ordering of some lines in order to use advantage of pipelined processor.
+# Also using the definition of leaq, I was be able to merge some lines like leaq$-8(%rdx),%rcx. This was a total of three line at first.
+#
+# In addion to these, I figure out that the 1 length test is reducing my CPE highy. So, I added a control mechanism if the array is length 1,
+# it directly jumps to the last part without dealing with other codes.
+#
+# Using icmpq also helped me in terms of time but not length. Instead of first substracting and then andq for length of array,
+# I directly compared my remaining value with a constant. But like I said, it increased my length significantly.
+#
+# At the end, I was be able to get average CPE=9.8.
+#
+##################################################################
+# Do not modify this portion
+# Function prologue.
+# %rdi = src, %rsi = dst, %rdx = len
+absrev:
+##################################################################
+    xorq %rax, %rax 
+    icmpq $1, %rdx
+    jg INPUT_LARGER_ONE
+    je ONLY_ONE
+    jl ZERO
+
+INPUT_LARGER_ONE: 
+
+    leaq $-8(%rdx), %rcx
+
+    addq %rdx, %rcx
+    addq %rdx, %rcx
+    addq %rdx, %rcx
+    addq %rdx, %rcx
+    addq %rdx, %rcx
+    addq %rdx, %rcx
+    addq %rdx, %rcx
+    addq %rsi, %rcx
+
+    icmpq $8, %rdx
+	jl LOOP_FOUR
+
+LOOP_EIGHT:
+
+    leaq $-8(%rdx), %rdx
+
+	mrmovq (%rdi), %rsi
+	mrmovq 8(%rdi), %r8
+	mrmovq 16(%rdi), %r9
+	mrmovq 24(%rdi), %r10
+	mrmovq 32(%rdi), %r11
+	mrmovq 40(%rdi), %r12
+	mrmovq 48(%rdi), %r13
+	mrmovq 56(%rdi), %r14
+	rmmovq %rsi, (%rcx)
+	rmmovq %r8, -8(%rcx)
+	rmmovq %r9, -16(%rcx)
+	rmmovq %r10, -24(%rcx)
+	rmmovq %r11, -32(%rcx)
+	rmmovq %r12, -40(%rcx)
+	rmmovq %r13, -48(%rcx)
+	rmmovq %r14, -56(%rcx)
+	
+	andq %rsi,%rsi
+	jg N1 
+	subq %rsi, %rax
+	jmp N2
+    
+N1:
+    addq %rsi,%rax
+N2:
+    andq %r8,%r8
+    jg N3
+    subq %r8, %rax
+    jmp N4
+    
+N3:
+    addq %r8, %rax
+N4:
+    andq %r9, %r9
+    jg N5
+    subq %r9,%rax
+    jmp N6
+N5:
+    addq %r9, %rax
+N6:
+    andq %r10, %r10
+    jg N7
+    subq %r10, %rax
+    jmp N8   
+N7:
+    addq %r10, %rax
+N8:
+    andq %r11, %r11
+    jg N9
+    subq %r11, %rax
+    jmp N10
+N9:
+    addq %r11, %rax
+N10:
+    andq %r12, %r12
+    jg N11
+    subq %r12,%rax
+    jmp N12
+N11:
+    addq %r12, %rax
+N12:
+    andq %r13, %r13
+    jg N13
+    subq %r13, %rax
+    jmp N14
+N13:
+    addq %r13, %rax
+N14:
+    andq %r14, %r14
+    jg N15
+    subq %r14, %rax
+    jmp LOOP_EIGHT_TEST
+N15:
+    addq %r14, %rax
+
+LOOP_EIGHT_TEST:
+    leaq $64(%rdi), %rdi
+    leaq $-64(%rcx), %rcx
+
+    icmpq $8, %rdx
+    jge LOOP_EIGHT
+    
+LOOP_FOUR:
+    icmpq $4, %rdx
+	jl less_than_4
+
+loop_for_len_4:
+
+    leaq $-4(%rdx),%rdx
+
+    mrmovq (%rdi), %rsi
+    mrmovq 8(%rdi), %r8
+    mrmovq 16(%rdi), %r9
+    mrmovq 24(%rdi), %r10
+    rmmovq %rsi, (%rcx)
+    rmmovq %r8, -8(%rcx)
+    rmmovq %r9, -16(%rcx)
+    rmmovq %r10, -24(%rcx)
+    
+    andq %rsi,%rsi
+    jg  S0
+    subq %rsi, %rax
+    jmp S1
+S0:
+    addq %rsi, %rax
+S1:
+	andq %r8,%r8
+	jg S2
+	subq %r8, %rax
+    jmp S3
+    
+S2:
+    addq %r8, %rax
+S3:
+	andq %r9,%r9
+	jg S4
+	subq %r9, %rax
+	jmp S5
+S4:
+    addq %r9, %rax
+S5:
+	andq %r10,%r10
+	jg S6 
+	subq %r10, %rax
+    jmp test_loop
+    
+S6:
+    addq %r10, %rax
+    
+test_loop:
+    leaq $32(%rdi), %rdi
+    leaq $-32(%rcx),%rcx
+
+    icmpq $4, %rdx
+    jge loop_for_len_4
+
+less_than_4:
+    icmpq $2, %rdx
+    jl less_than_2 # if not less_than2 len>=2 and len<4
+len2:
+    leaq $-2(%rdx),%rdx
+
+    mrmovq (%rdi), %rsi
+    mrmovq 8(%rdi), %r8
+    rmmovq %rsi, (%rcx)
+    rmmovq %r8, -8(%rcx)
+
+    andq %rsi,%rsi
+    jg  S7
+    subq %rsi,%rax
+    jmp S8
+S7:
+    addq %rsi, %rax
+S8:
+    andq %r8, %r8
+    jg S9
+    subq %r8,%rax
+    jmp left_1
+    
+S9:
+    addq %r8, %rax
+left_1:
+
+    icmpq $1, %rdx
+    jge REMAINING_ONE
+    ret
+
+less_than_2:
+    icmpq $1, %rdx
+    jge LAST_ONE
+    jmp Done                 # Size of the array is 0, return directly
+ONLY_ONE:
+    rrmovq %rsi, %rcx
+    jmp LAST_ONE
+ZERO:
+    jmp Done
+REMAINING_ONE:
+    leaq $16(%rdi),%rdi
+    leaq $-16(%rcx),%rcx
+LAST_ONE:                       # Size of the array is 1, copy it to correct place
+    mrmovq (%rdi), %rsi
+    rmmovq %rsi, (%rcx)
+    andq %rsi,%rsi
+    jg  S10
+    subq %rsi, %rax
+    jmp Done
+S10:
+    addq %rsi, %rax
+    jmp Done
+##################################################################
+# Do not modify the following section of code
+# Function epilogue.
+Done:
+    ret
+##################################################################
+# Keep the following label at the end of your function
+End:
+#/* $end absrev-ys */

@@ -1,0 +1,108 @@
+
+    .pos 0
+    irmovq stack, %rsp     
+    call main     
+    halt         
+    
+# A binary (not search!) tree,
+# absolutely positioned again.
+    .pos 0x200
+root:
+    .quad 5
+    .quad node7
+    .quad node12
+node7:
+    .quad 7
+    .quad node25
+    .quad node905
+node25:
+    .quad 25
+    .quad 0
+    .quad 0
+node905:
+    .quad 905
+    .quad nodem1
+    .quad 0
+nodem1:
+    .quad -1
+    .quad 0
+    .quad 0
+node12:
+    .quad 12
+    .quad node219
+    .quad nodem10
+node219:
+    .quad 219
+    .quad 0
+    .quad 0
+nodem10:
+    .quad -10
+    .quad 0
+    .quad node331
+node331:
+    .quad 331
+    .quad 0
+    .quad 0
+
+main:   
+    irmovq root, %rdi
+    call max_btree       
+    ret
+
+max_btree:
+    irmovq $-100000, %rax   # Return the LONG_MIN if tree is empty.
+    andq %rdi, %rdi
+    jne valid_node
+    jmp unvalid_node
+
+valid_node:
+
+    mrmovq (%rdi), %rax
+    pushq %rax
+    mrmovq 16(%rdi), %r8
+    pushq %r8
+    mrmovq 8(%rdi), %rdi
+    call max_btree
+
+    rrmovq %rax, %r9
+    rrmovq %rax, %r8
+    
+    popq %r14
+    popq %r10
+
+    subq %r10, %r9
+    jle right
+
+    pushq %r8
+    pushq %r14
+
+right:
+
+    pushq %r10
+    pushq %r14
+    
+    mrmovq (%rsp), %rdi
+    call max_btree
+
+    rrmovq %rax, %r9
+    rrmovq %rax, %r8
+    popq %rsi
+    popq %r10
+    rrmovq %r10, %rax
+    subq %r10, %r9
+    jle last2
+    pushq %r8
+    pushq %rsi
+    rrmovq %r8, %rax
+
+unvalid_node:
+    ret
+
+last2:
+    rrmovq %r10 ,%rax
+    ret
+# Stack starts here and grows to lower addresses
+    .pos 0x200
+stack:
+
+
